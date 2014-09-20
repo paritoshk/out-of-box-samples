@@ -1,0 +1,115 @@
+---
+title: "Machine Learning Assignment"
+author: "Abu Nayeem"
+date: "September 19, 2014"
+output: html_document
+---
+
+# Preparation
+
+```{r, message=FALSE}
+if (!file.exists("./out-of-box-samples")) {
+     dir.create("./out-of-box-samples")
+}
+rm(list = ls(all = TRUE))
+date() #set date
+library(caret)
+library(plyr)
+library(dplyr)
+library(gbm)
+library(sampling)
+library(lubridate)
+```
+
+Extract Respective Data: [Note: I changed NA and #Div/0 into NA strings to make it easier to data clean later]
+```{r, message=FALSE}
+trainingfile <- 'http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv'
+training <- read.csv(trainingfile, na.strings=c("NA", "#DIV/0!"))
+training <- tbl_df(training)
+testingfile <- 'http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv'
+testing <- read.csv(testingfile, na.strings=c("NA", "#DIV/0!"))
+testing <- tbl_df(testing)
+dim(training)
+str(training)
+```
+
+# Data Cleaning: 
+
+The goal is to make the data simple/small as possible without losing predictability. The primary strategy in datamining is that I cannot change the training set fundamentally because the testing set will not have those changes because it will be raw. So the goal of the datamining process if finding which columns are primary canndidates to implement the analysis. In addition, this prevents me from changing classes of variables, because the predictor alogithm may not work for the raw dataset.
+
+1) I notice alot of variables that are missing values, I handle missing values the following way 
+```{r, message=FALSE}
+colSums(is.na(training)) # now we see the number of missing values in columns and see if they are significant for removal
+NonNAIndex <- which(colSums(is.na(training)) > 0) # this extracts the index of missing variable
+RemoveNA <- training[ ,-NonNAIndex] # Create new data frame that remmove columns that had missing values
+compacttraining <- select(RemoveNA, 2:5, 8:60) # choose the columns that may be useful for analysis
+```
+
+2) Test if there are zero covariates:
+```{r}
+Nsv <- nearZeroVar(compacttraining,saveMetrics=TRUE) #this checks if all columns have close to zero variance 
+#the saveMetric provide heuristic information of each column which is REALLY useful
+Nsv # all false, so no columns will be removed
+```
+
+3) Check for correlated pairs
+```{r, message=FALSE}
+M <- abs(cor(compacttraining[ ,c(2,3,5:56)]))
+diag(M) <- 0
+which(M > 0.8, arr.ind=T)
+```
+
+Matching Pairs: below
+(28)magnet_arm_z & magnet_arm_y(27) 
+(36)accel_dumbbell_x & pitch_dumbbell (29)
+(38)accel_dumbbell_z & yaw_dumbbell (31) 
+(26)magnet_arm_x & accel_arm_x(23) 
+(20)gyros_arm_x & gyros_arm_y(21)
+(13)magnet_belt_x => pitch_belt(10) & accel_belt_x [circle](4)
+(3)roll_belt => & yaw_belt(5) & total_accel_belt(6) & accel_belt_y(11) & accel_belt_z(12) 
+(48)gyros_forearm_z => gyros_forearm_y (47) & gyros_dumbbell_z(35) & gyros_dumbbell_x(33)
+
+I do not use PCA to combine the variables because the analysis would need there as well and the rows may not comply. So I simply remove columns that are in the left side of the pairing.
+
+Remove the following:
+```{r}
+descriptivetraining <- select(compacttraining, 
+                       -c(magnet_arm_y , pitch_dumbbell, yaw_dumbbell , accel_arm_x, gyros_arm_y, 
+                       pitch_belt, accel_belt_x, yaw_belt , total_accel_belt , accel_belt_y , 
+                       accel_belt_z, gyros_forearm_y, gyros_dumbbell_z, gyros_dumbbell_x))
+descriptivetraining <- select(compacttraining, -c(27,28,31,23,21,4,10,5,6,11,12,47,35,33))  #the same as above                     
+```
+
+Save the column names: we can know index to the orginal raw dataset
+```{r}
+columncompactIndex <- colnames(descriptivetraining)  
+```
+
+#Data Preparation
+
+I will be taking a random sample of 3000 observations. From this sample, I split it into a smaller training set and a cross validation set, which acts more or less like a testing set
+```{r}
+set.seed(234)
+sampletrain <- training[sample(nrow(training), 3000), ]
+inTrain <- createDataPartition(y=sampletrain$classe, p=0.7, list=FALSE)
+smalltraining <- sampletrain[inTrain, ]
+crossvalidation <- sampletrain[-inTrain, ]
+```
+
+# Machine Learning Implementation
+
+```{r, message=FALSE}
+gbmGrid <-  expand.grid(interaction.depth = 5,
+                        n.trees = 150,
+                        shrinkage = 0.1)
+modelFit <- train(classe ~ .,method="gbm",data=smalltraining[ ,columncompactIndex],tuneGrid=gbmGrid)
+```
+
+# The Results
+
+```{r}
+results<-predict(modelFit,crossvalidation) 
+confusionMatrix(results,crossvalidation$classe)
+```
+
+The results are very solid
