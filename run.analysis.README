@@ -1,0 +1,169 @@
+---
+title: "README"
+author: "Abu nayeem"
+date: "September 6, 2014"
+output: html_document
+---
+
+// denoted code
+
+Getting and Cleaning Data project:
+
+Prior to talking about the code, let's talk about the dataset and the library:
+
+Info: the dataset consist taking the readings of 30 people for various activities while wearing accelerator(Acc) and gyroscope(Gyro). The data is primarily technical readings from these items, where accelerator measures acceleration which is (meters per second square). While the gyroscope measure velocity which is (meter per second). The data is divided into training and testing set for predictive purposes. For this exercise, we are aggregating the data.
+
+Sub-Classification:
+The signals from the machine can then be subcategorized as body(Body) and gravitational signal(Gravity).
+
+Sub-Sub-Classifications:
+From the previous signals, researchers were able to derive the jerk signal (Jerk), and the  magnitude (Mag) using the the Euclidean norm
+
+Other Classifications:
+Prefix (i.e. begin with): t denoted the times when observation is taken; f denote frequency domain signals, but more simply a Fast Fourier Transform was implemented
+Direction: XYZ denotes respectively a coordinate in the 3 dimensional place, in this case, it indicate 3 axial signals
+Activities: These include walking, walking upsta
+
+Example: tBodyGyroJerkMag
+Interpretation: This is the magnitude (Mag) of the jerk signal (Jerk) derived from the body (Body) signal captured by the Gyroscope (Gyro) in real time (t). Note: magnitude is unitless in this case
+
+Function Operations: followed the "features info text"
+
+mean(): Mean value
+std(): Standard deviation
+mad(): Median absolute deviation 
+max(): Largest value in array
+min(): Smallest value in array
+sma(): Signal magnitude area
+energy(): Energy measure. Sum of the squares divided by the number of values. 
+iqr(): Interquartile range 
+entropy(): Signal entropy
+arCoeff(): Autorregresion coefficients with Burg order equal to 4
+correlation(): correlation coefficient between two signals
+maxInds(): index of the frequency component with largest magnitude
+meanFreq(): Weighted average of the frequency components to obtain a mean frequency
+skewness(): skewness of the frequency domain signal 
+kurtosis(): kurtosis of the frequency domain signal 
+bandsEnergy(): Energy of a frequency interval within the 64 bins of the FFT of each window.
+angle(): Angle between to vectors.
+
+Additional vectors obtained by averaging the signals in a signal window sample. These are used on the angle() variable:
+
+gravityMean
+tBodyAccMean
+tBodyAccJerkMean
+tBodyGyroMean
+tBodyGyroJerkMean
+
+My additional Variables include:
+participants: denotes the respective participant in the study [1-30]
+activities: denotes the activities each subject was doing [walking, walking upstairs/downstairs, sitting, standing, laying]
+
+Important Datasets:
+Master dataset combines training and test
+InstrumentMeanMatrix dataset extracts all the mean columns
+InstrumentSTDMatrix dataset extracts all the STD columns
+
+Datamining Phase:
+Connection1: the features.txt has 561 labels which is the exact amount for train data
+Connection2: the activities txt has exactly 6 variables making it the label for the YTrain/Test 
+
+Load the following data:
+//
+YTest<- read.table("Y_test.txt")
+XTest<- read.table("X_test.txt")
+SubjectTest<- read.table("subject_test.txt")
+YTrain<- read.table("Y_train.txt")
+XTrain<- read.table("X_train.txt")
+SubjectTrain<- read.table("subject_train.txt")
+Features<- read.table("features.txt")
+//
+Now I combine the smaller dataframes with the XTrain and XTest data. Notice I take specific columns and even use transpose
+//
+colnames(XTrain)<-t(Features[2]) #give column names
+colnames(XTest)<-t(Features[2])
+XTrain$activities<- YTrain[,1] #attach activities
+XTrain$participants<- SubTrain[,1] #attach participants
+XTest$activities<- YTest[,1]
+XTest$participants<- SubTest[,1]
+//
+=>Assignment#1 : Merge Train and Test dataset
+
+I call the dataset because it combines the two sets, but notice the second and third line. The second line checks for duplicates, and third line removes duplicates.
+//
+Master<-rbind(XTrain,XTest)
+duplicated(colnames(Master))
+Master<-Master[, !duplicated(colnames(Master))]
+//
+=>Assignment 2: Extract the means and STD
+
+Strategy- I am searching for the string "mean" and then choose accordingly. I want to construct a matrix of the means and STD. I highlight the process because it is informative.
+//
+Mean<-grep("mean", names(Master), value = TRUE, fixed=TRUE)
+Mean
+Mean<-grep("mean()", names(Master), value = FALSE, fixed=TRUE)
+Mean<-append(Mean,471:477)
+InstrumentMeanMatrix<-Master[Mean]
+//
+In addition, we need to include 471:477 as they have means and are associated with the gravity terms. Note as value=FALSE we get the indice. The fixed feature is for exact match
+
+For STD:
+//
+STD<-grep("std", names(Master), value = TRUE)
+STD
+STD<-grep("std()", names(Master), value = FALSE)
+InstrumentSTDMatrix<-Master[STD]
+//
+
+=>Assignment 3 : Make Acitivites more descriptive
+
+For computation ease- convert to character variable first. I alter the strings accordingly by choosing the cell of interest and where to implement the change. Then I convert activities back to factor and then check my work
+//
+Master$activities<- as.character(Master$activities)
+Master$activities[Master$activities==1]<-"Walking"
+Master$activities[Master$activities==2]<-"Walking Upstairs"
+Master$activities[Master$activities==3]<-"Walking Downstairs"
+Master$activities[Master$activities==4]<-"Sitting"
+Master$activities[Master$activities==5]<-"Standing"
+Master$activities[Master$activities==6]<-"Laying"
+Master$activities<- as.factor(Master$activities)
+summary(Master$activities)
+//
+
+=>Assignment 4 create more descriptive variables
+
+Read the features description data, there are some acronyms that can be explained and participants does not need to be a number. I decided not to expand mathematical operations because they are wordy.
+//
+names(Master)<- gsub("Acc","Accelerator", names(Master))
+names(Master)<- gsub("Mag","Magnitude", names(Master))
+names(Master)<- gsub("Gyro","Gyroscope", names(Master))
+names(Master)<- gsub("^t","time", names(Master))
+names(Master)<- gsub("^f","frequency", names(Master))
+//
+The code above search for these characters and then replace, notice ^f denotes first character in cell
+
+Similar to Assignment three we give participants names, but the code is repetitive so here is a tad bit
+//
+Master$participants<- as.character(Master$participants)
+Master$participants[Master$participants==1]<-"Participant 1"
+Master$participants[Master$participants==2]<-"Participant 2"
+...
+//
+=>Assignment 5- Create a tidy data set
+
+The description is dry.Translation: we want the mean of each variable, subset by person and activity; Note this is crucial in how to code this
+
+I converted the Master file to data table because it is more flexible. The last line of code does the magic. It takes the mean of all the columns(.SD) but first separates by activities and participants. To know you did it correct, you should get 180 observations and the same number of variables
+//
+library(plyr)
+library(data.table)
+Master.dt = data.table(Master)
+TidyData<-Master.dt[,lapply(.SD, mean),by='participants,activities']
+//
+
+Finally we write this tidy dataset down
+//
+write.table(TidyData,file="Tidy.txt", row.names=FALSE)
+// 
+
+The End
