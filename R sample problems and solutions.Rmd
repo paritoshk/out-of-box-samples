@@ -1,0 +1,330 @@
+---
+title: "R Sample Problems"
+author: "Abu Nayeem"
+date: "September 17, 2014"
+output: html_document
+---
+
+
+BASIC
+
+# Problem 1
+Create a new R object that contains the heights in meters ($1 m \approx 39.4 in$) using the *height1* and *height2*  variables in the *earnings* dataset. Make a histogram of the new variable with breakpoints between the bins every 10 cm.
+```{r}
+inchPerMeter <- 39.4
+inchPerFoot <- 12
+hgt_m <- (earnings$height1 * inchPerFoot + earnings$height2) / inchPerMeter
+hist(hgt_m, breaks = seq(1.4, 2.1, by = .1))
+```
+
+# Problem 2
+For a random subset of 100 individuals from the earnings dataset, create a vector with their earnings.
+```{r}
+smp <- sample(1:nrow(earnings), 100)
+sub <- earnings$earn[smp]
+```
+
+DATA ATTRIBUTES
+
+# Problem 1
+
+Using the presidential preference dataset, create a new column based on *age9* that gives, as a numeric value, the midpoint of the age range assigned to each person. Try to do this with a combination of subsetting and string operations (i.e., can you convert the character numbers to actual numbers). To simplify things, feel free to get rid of the rows for ages "75 and over".
+    
+
+```{r}
+vote$age9 <- as.character(vote$age9)
+vote$age9[vote$age9 == "75 or over"] <- "75-99"
+lower <- as.numeric(substring(vote$age9, 1, 2))
+upper <- as.numeric(substring(vote$age9, 4, 5))
+vote$approxAge <- (lower + upper) / 2
+hist(vote$approxAge, breaks = 40)
+```
+
+# Problem 2
+
+Go back to slide 6 on logical vectors and figure out what is going on in the last few lines of code.
+
+
+```{r}
+answers <- c(TRUE, TRUE, FALSE, FALSE)
+update <- c(TRUE, FALSE, TRUE, FALSE)
+
+answers & update
+answers * update
+as.numeric(answers)*as.numeric(update)
+
+answers | update
+answers + update
+as.logical(answers + update)
+```
+
+# Problem 3
+
+Go back to slide 22 and figure out what is going on with that complicated last line of code.
+
+```{r}
+table(vote$race, vote$pres04)
+xtab <- xtable(table(vote$race, vote$pres04))
+print.xtable
+?print.xtable
+```
+
+So there is a special `print()` method associated with xtables and one of its options is to print out an HTML version of the table. 
+
+CALCULATIONS:
+
+# Problem 1
+
+**To see this problem with the equations below rendered correctly, see module3_calc.html (the non-slide version).**
+
+Suppose we have two categorical variables and we conduct a hypothesis test of independence. The chi-square statistic is: 
+
+\[
+\chi^2 = \sum_{i=1}^{n}\sum_{j=1}^{m} \frac{(y_{ij} - e_{ij})^2}{e_{ij}}, 
+\] 
+
+where $e_{ij} = \frac{y_{i\cdot} y_{\cdot j}}{y_{\cdot \cdot}}$, with $y_{i\cdot}$ the sum of the values in the i'th row, $y_{\cdot j}$ the sum of values in the j'th column, and $y_{\cdot\cdot}$ the sum of all the values. Suppose I give you a matrix in R with the $y_{ij}$ values. Compute the statistics without *any* loops.
+
+You can generate a test matrix as: `y <- matrix(sample(1:10, 12, replace = TRUE), nrow = 3, ncol = 4)`.
+
+1. Assume you have the *e* matrix. How do you compute the statistic without loops?
+2. How can you construct the *e* matrix? Hint: the numerator of *e* is just an *outer product* for which the `outer()` function can be used.
+
+
+```{r}
+        y <- matrix(sample(1:10, 12, replace = TRUE), nrow = 3, ncol = 4)     
+     yidot <- rowSums(y)
+     ydotj <- colSums(y)
+     e <- outer(yidot, ydotj) / sum(y)
+     sum( (y - e)^2 / e)
+```
+
+
+# Problem 2
+
+For each combination of sex and education level, find the *second* largest value of earnings amongst the people in the group without any looping.
+
+
+```{r}
+results <- by(earnings, list(earnings$sex, earnings$ed), 
+  function(x) {
+  tmp <- sort(x$earn, decreasing = TRUE)
+  tmp[2]
+  }
+)
+```
+
+Hmm, that format is awkward. We can play around a bit and see what the underlying structure is...
+
+```{r}
+dim(results)
+results[1, ]
+as.matrix(results)
+attributes(results)
+class(results) <- "matrix"
+results
+```
+
+
+#Programming:
+
+1) Write a function that returns the mean of N normally distributed random numbers.
+
+```{r}
+meanOfNormals <- function(N) {
+  mean(rnorm(N))
+}
+
+meanOfNormals(1)
+meanOfNormals(10)
+meanOfNormals(100)
+meanOfNormals(1000)
+meanOfNormals(10000)
+```
+
+# Solutions to breakout problems: problem #2
+
+2) Extend exercise #1: allow the user to pass parameters for the normal distribution, and return both mean and median.
+
+```{r}
+statsOfNormals <- function(N, mean=0, sd=1) {
+  myVars <- rnorm(N, mean, sd)
+  out <- list(mean(myVars), median(myVars))
+  names(out) <- c("mean","median")
+  out
+}
+
+statsOfNormals(1, 5, 2)
+statsOfNormals(10, 5, 1)
+statsOfNormals(100, 3)
+statsOfNormals(1000, 3)
+statsOfNormals(10000, 3)
+```
+
+# Solutions to breakout problems: problem #3
+
+3) Write a function that repeatedly generates random normal variables until it generates a random number more than N standard deviations from the mean. Return the number of samples performed up to that point.
+
+```{r}
+nUntilFluctuation <- function(N) {
+  i <- 0
+  var <- 0
+  while (abs(var) < N) {
+    var = rnorm(1)
+    i = i+1
+  }
+  i
+}
+
+nUntilFluctuation(1.0)
+nUntilFluctuation(2.0)
+nUntilFluctuation(3.0)
+nUntilFluctuation(4.0)
+```
+
+
+ANALYSIS:
+
+Consider the voting preference data. Fit a logistic regression to the data for California (state number 5), modeling preference for Bush (pres04=2) vs. Kerry (pres04=1) (removing the other candidates) as a function of income, potentially including additional covariates such as sex, race and age. What do you find in terms of how income associates with voting preference?
+
+```{r}
+ca <- vote[vote$state == 5, ]
+ca <- ca[ca$pres04 == 1 | ca$pres04 == 2, ]
+ca$pres04[ca$pres04 == 2] <- 0 # 0=bush; 1=kerry
+mod0 <- glm(pres04 ~ income, data = ca, family = binomial)
+mod1 <- glm(pres04 ~ income + race + sex, data = ca, family = binomial)
+# stratified models
+mod_white <- glm(pres04 ~ income + sex, data = ca[ca$race == 'white', ], 
+  family = binomial)
+mod_black <- glm(pres04 ~ income + sex, data = ca[ca$race == 'black', ], 
+  family = binomial)
+```
+
+How do you predict the probability of voting for Kerry for a given set of covariate values? Consider the `predict.glm()` function and what its help page says. Or write code that converts from the model coefficients to the probability scale. Compare the predicted probability of voting for Kerry for a white male of high income with a white male of low income. Do the same for white females. 
+
+```{r}
+predict(mod1, newdata = data.frame(income = "$75,000-$99,999", sex = 'female', race = 'white'))
+predict(mod1, newdata = data.frame(income = "$15,000-$29,999", sex = 'female', race = 'white'))
+predict(mod1, newdata = data.frame(income = "$75,000-$99,999", sex = 'female', race = 'black'))
+```
+
+
+# Ambitious solutions
+
+Using the tools for stratified analyses we have seen today, fit separate models of voting preference as a function of (personal) income and sex (and potentially additional covariates) for each state (or a collection of states of interest to you). How do the effect of income and sex vary by state? The file stateIncome.txt is a tab-delimited file of mean income by state. See if the effects of income and sex are correlated with the state-level mean income. 
+
+The following only barely scratches the surface of what one could/should do.
+
+```{r}
+vote_white <- vote[vote$race == "white", ]
+spl <- split(vote_white, vote_white$state)
+out <- sapply(spl, function(x) {
+  mod <- glm(pres04 ~ income + sex, data = x, family = binomial)
+  mod$coef
+})
+
+stateIncome <- read.table('../data/stateIncome.txt', sep = '\t', stringsAsFactors = FALSE)
+names(stateIncome) <- c('state', 'avgIncome')
+stateIncome <- stateIncome[-9, ] # remove DC
+identical(stateIncome[ , 1], row.names(state.x77)) # check ordering
+
+plot(stateIncome$avgIncome, out[6, ], xlab = 'average state income', ylab = 'female effect')
+# identify(stateIncome$avgIncome, out[6, ])
+stateIncome[37, ] # perhaps a large standard error?
+```
+
+CORE-TOOLS
+
+# Problem 1
+
+Suppose you wanted to do 10-fold cross-validation for some sort of regression model fit to the *earnings* dataset. Write some R code that produces a field in the dataset that indicates which fold each observation is in. Ensure each of the folds has an equal (or as nearly equal as possible if the number of observations is not divisible by 10) number of observations. Hint: consider the *times* argument to the `rep()` function.
+
+```{r}
+nFolds <- 10
+n <- nrow(earnings)
+tmp <- round(n / nFolds) 
+foldSize <- c(rep(tmp, nFolds - 1), n-tmp*(nFolds-1))
+if(sum(foldSize) != n) stop("division into folds is incorrect")
+fold <- rep(1:nFolds, times = foldSize)
+if(sum(table(fold) == foldSize) != nFolds) stop("division into folds is incorrect")
+set.seed(0)
+earnings$fold <- sample(fold)
+```
+
+
+# Problem 2
+
+Write some code to demonstrate the central limit theorem. Generate many different replicates of samples of size `n` from a skewed or discrete distribution and show that if `n` is big enough, the distribution of the means (of each sample of size `n`) looks approximately normal in a histogram. Do it without any looping! 
+
+```{r}
+sampleSizes <- c(10, 50, 300)
+
+plotFun <- function(n, numReps = 10000) {
+   devs <- matrix(rchisq(n*numReps, df = 2), nrow = 10000)
+   hist(rowMeans(devs), xlab = 'mean of sample', 
+   main = paste("n = ", n, sep = ''))
+}
+
+par(mfrow = c(1, length(sampleSizes)), mai = c(.5, .5, .3, .1))
+sapply(sampleSizes, plotFun)
+```
+
+GRAPHICS
+
+1) Not all variable types are suitable for representation by every ggplot aesthetic.  What kinds of variables can the aesthetics color, size, and shape meaningfully represent? 
+
+2) ggplot graphics are often layered, with some data represented by a set of aesthetics being overlayed upon a different combination of data and aesthetics.  Can you fit simple linear trend lines to every facet of the grided voter turnout graph?  Hint: use a simple linear regression and consult ?geom_smooth
+
+Breakout Answers:
+
+1) 
+
+Color: discrete, continuous, ordered, unordered; 
+Size: discrete, continuous, ordered, unordered; 
+Shape: discrete, unordered
+
+2) 
+
+```{r}
+ggplot(data=mydata, aes(x=year, y=vturn))+geom_point()+facet_wrap(~country)+
+  geom_smooth(method="lm", color="red", size=1)
+```
+
+
+
+
+
+PARALLEL
+
+# Problem
+
+Fit logistic regression models of preference for Bush/Kerry on income, stratified by state. Use `foreach` or a parallel version of one of the *apply* variants.  Collect the resulting coefficients (and standard errors, if you're feeling ambitious) in a clean format such as a matrix or data frame.  Check to see if multiple cores are being used in the execution.
+
+
+```{r}
+require(parallel)
+nCores <- 4
+p <- sum(table(vote$income) != 0)
+
+spl <- split(vote, vote$state)
+system.time({out <- lapply(spl, 
+  function(x) {
+    mod <- glm(pres04 ~ income, data = x)
+    summary(mod)$coefficients[ , 1:2] # leave off z-value/p-value
+  }
+)})
+
+system.time({out <- mclapply(spl, 
+  function(x) {
+    mod <- glm(pres04 ~ income, data = x)
+    summary(mod)$coefficients[ , 1:2] # leave off z-value/p-value
+  }
+)})
+coefs <- array(unlist(out), c(p, 2, length(spl)))
+identical(c(coefs[ , , 3]), c(out[[3]])) # check ordering...
+
+```
+
+Note that there was no point in parallelizing this particular computation given the size of the problem!
+
+

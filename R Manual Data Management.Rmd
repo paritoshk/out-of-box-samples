@@ -5,8 +5,12 @@ date: "September 9, 2014"
 output: html_document
 ---
 
-###Introduction
+### Introduction
 This Manual is meant to consolidate my knowledge in data analytics. In addition, I am happy to share data techniques and strategies to anyone. Many manuals focus on small datasets, the strategies here will try to focus on Big Data. There are different types of "big"" datasets; 1) many observations [i.e. rows], which is not too bad; 2) many columns which are more difficult as you need to assess if columns are useful or not or it is worth tinkering with. In addition, simple subsetting operations now become more tedious and time-consuming.  
+
+### Unresolved Questions
+
+1) Suppose I zip a file from the internet, who can I find a specific 
 
 ####Update History
 MAC OS
@@ -19,10 +23,15 @@ Number of cores: 2 [Use command on terminal: system_profiler | grep -i 'Cores']
 A) Set working directory: 
 A good default is create a working directory for the specifc folder. Make sure in quotes and ./ is attached to document. The code below state if not in the designated directory the create a new directory regardless of the starting point.
 ```{r, message=FALSE}
-if (!file.exists("./Repository Important")) {
-     dir.create("./Repository Important")
+if (!getwd() == "./out-of-box-samples") {
+    dir.create("./out-of-box-samples")
+    setwd("./out-of-box-samples")
 }
 ```
+
+
+dir.create(file.path(mainDir, subDir), showWarnings = FALSE)
+setwd(file.path(mainDir, subDir))
 
 B) Clear Work Space- No clutter please
 ```{r, message=FALSE}
@@ -73,7 +82,7 @@ fun3 <- function(x) {
 4) We can insert ``browser()`` inside a function and R will stop there and allow us to proceed with debugging statements
 5) You can temporarily insert code into a function (including built-in functions) with ``trace(fxnName, edit = TRUE)``
 
-G) Constructing your own functions: Unless you are in the cutting edge or face redundant operations or handle similar datasets, then it worth the time to write. R package functions provide greater protection against faultyy code
+G) Constructing your own functions: Unless you are in the cutting edge or face redundant operations or handle similar datasets, then it worth the time to write. R package functions provide greater protection against faulty code
 
 H) General Stylized Rules:
 
@@ -104,6 +113,15 @@ StormData<-read.csv(text = grep("^[1,2]/2/2007",readLines(portion),value=TRUE, h
 #other features include skip, nrows, stringsAsFactors, na.strings,and ColClasses, the last item is to store the data with less RAM 
 colnames(Power)<-t(Columns[1]) 
 #the transposed matrix of one is appeneded to primary dataset as column names
+```
+
+    Extraction of zip with multiple files:
+```{r}
+temp <- tempfile()
+download.file("https://d396qusza40orc.cloudfront.net/getdata%2Fprojectfiles%2FUCI%20HAR%20Dataset.zip ",temp)
+unzip(temp, list = TRUE) # This shows the list of files name!
+YTest <- read.table(unzip(temp, "UCI HAR Dataset/test/y_test.txt"))
+unlink(temp)
 ```
 
     SQL Method: Extraction
