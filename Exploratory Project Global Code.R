@@ -1,10 +1,23 @@
 #Abu Nayeem
-#Plot 1
+#ALL PLOTS
 
-#download and unzip file and MAKE sure file is in working directory
+# Preparation:
+if (!getwd() == "./out-of-box-samples") {
+    dir.create("./out-of-box-samples")
+    setwd("./out-of-box-samples")
+}
+rm(list = ls(all = TRUE))
+library(plyr) # load plyr first, then dplyr 
+library(data.table) # a prockage that handles dataframe better
+library(dplyr) # for fancy data table manipulations and organization
 
-fh<-file("household_power_consumption.txt","r");
+# Extraction
+temp <- tempfile()
+download.file("https://d396qusza40orc.cloudfront.net/exdata%2Fdata%2Fhousehold_power_consumption.zip",temp, method="curl")
+unzip(temp)
+fh<-file("household_power_consumption.txt","r")
 Power<- read.table(text = grep("^[1,2]/2/2007",readLines(fh),value=TRUE), sep=";",na.strings="?")
+unlink(temp)
 colnames(Power)<- c("Date","Time","Global_active_power","Global_reactive_power","Voltage","Global_intensity","Sub_metering_1","Sub_metering_2","Sub_metering_3" )
 
 # Convert Data and Time together
@@ -17,7 +30,6 @@ dev.copy(png,filename="plot1.png")
 dev.off()
 
 #Construct new varaible 
-plot( Power$DateTime, Power$Global_active_power)
 with(Power,plot(DateTime, Global_active_power, type="l", ylab="Global Active Power (kilowatts)"))
 dev.copy(png,filename="plot2.png")
 dev.off()
@@ -33,7 +45,7 @@ dev.off()
 #note lty makes it a line in the legend
 
 #part4
-par(mfrow=c(2,2), mar=c(4,4,2,1), oma=c(0,0,2,0))
+par(mfrow=c(2,2), mar=c(4,4,2,1))
 with(Power,{
   plot(DateTime, Global_active_power, type="l", ylab="Global Active Power")
   plot(DateTime, Voltage, type="l")

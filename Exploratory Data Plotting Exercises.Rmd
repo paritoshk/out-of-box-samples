@@ -1,0 +1,78 @@
+---
+title: "Exploratory Data Plotting Exercises"
+author: "Abu Nayeem"
+date: "September 22, 2014"
+output: html_document
+---
+
+## Data
+Household Energy Consumption Data. I extracted only two days worth of data, which is captured by the grep function
+
+
+## Preprocessing
+
+```{r, message=FALSE, results = "hide"}
+if (!getwd() == "./out-of-box-samples") {
+    dir.create("./out-of-box-samples")
+    setwd("./out-of-box-samples")
+}
+rm(list = ls(all = TRUE))
+library(plyr) # load plyr first, then dplyr 
+library(data.table) # a prockage that handles dataframe better
+library(dplyr) # for fancy data table manipulations and organization
+```
+
+Extraction
+```{r}
+temp <- tempfile()
+download.file("https://d396qusza40orc.cloudfront.net/exdata%2Fdata%2Fhousehold_power_consumption.zip",temp, method="curl")
+unzip(temp)
+fh<-file("household_power_consumption.txt","r")
+Power<- read.table(text = grep("^[1,2]/2/2007",readLines(fh),value=TRUE), sep=";",na.strings="?")
+unlink(temp)
+colnames(Power)<- c("Date","Time","Global_active_power","Global_reactive_power","Voltage","Global_intensity","Sub_metering_1","Sub_metering_2","Sub_metering_3" )
+```
+
+
+## Data Cleaning
+
+Convert Data and Time together
+```{r}
+DateTime <-paste(Power$Date,Power$Time)
+Power$DateTime <-strptime(DateTime, "%d/%m/%Y %H:%M:%S")
+```
+
+## Assignment
+
+Plot 1: Construct a histogram that measures that frequency of global energy usage
+```{r}
+hist(Power$Global_active_power, xlab="Global Active Power (kilowatts)",main="Global Active Power",col="red",)
+```
+
+Plot 2: Construct a line graph that measure global active power over time
+```{r}
+with(Power,plot(DateTime, Global_active_power, type="l", ylab="Global Active Power (kilowatts)"))
+```
+
+Plot 3: Layer different plots on the same graph with a legend 
+```{r}
+with(Power, plot(DateTime,Sub_metering_1, type="l", ylab = "Energy Sub Metering", col="grey"))
+points(Power$DateTime, Power$Sub_metering_2, type="l", col="red")
+points(Power$DateTime, Power$Sub_metering_3, type="l", col="blue")
+legend("topright", lty = 1, col =c("grey", "red", "blue"),legend = c("Sub_metering_1", "Sub_metering_2", "Sub_metering_3")) # note lty makes it a line in the legend
+```
+
+Plot 4: Construct multiple separate graphs in one separate window frame 
+```{r}
+par(mfrow=c(2,2), mar=c(4,4,2,1))
+with(Power, {
+  plot(DateTime, Global_active_power, type = "l", ylab = "Global Active Power")
+  plot(DateTime, Voltage, type="l")
+  plot(DateTime, Sub_metering_1, type="l", ylab="Energy Sub Metering", col = "grey")
+    points(Power$DateTime, Power$Sub_metering_2, type = "l", col = "red")
+    points(Power$DateTime, Power$Sub_metering_3, type = "l", col = "blue")
+    legend("topright", lty = 1, bty = "n", cex=0.4, col = c("grey", "red", "blue"), 
+           legend= c("Sub_metering_1", "Sub_metering_2", "Sub_metering_3")) # cex adjusts the the size of legend words, bty removes boundaries
+  plot(DateTime, Global_reactive_power, type = "l")
+})
+```

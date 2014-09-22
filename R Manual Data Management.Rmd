@@ -21,6 +21,7 @@ Number of cores: 2 [Use command on terminal: system_profiler | grep -i 'Cores']
 ###1) Preparation
 
 A) Set working directory: 
+
 A good default is create a working directory for the specifc folder. Make sure in quotes and ./ is attached to document. The code below state if not in the designated directory the create a new directory regardless of the starting point.
 ```{r, message=FALSE}
 if (!getwd() == "./out-of-box-samples") {
@@ -29,9 +30,11 @@ if (!getwd() == "./out-of-box-samples") {
 }
 ```
 
-
+Suppose you want to create main directory & sub-directory for output
+```{r}
 dir.create(file.path(mainDir, subDir), showWarnings = FALSE)
 setwd(file.path(mainDir, subDir))
+```
 
 B) Clear Work Space- No clutter please
 ```{r, message=FALSE}
@@ -90,7 +93,6 @@ Google R Stylized Rules: http://google-styleguide.googlecode.com/svn/trunk/Rguid
 Unit Testing Rules for functions: http://master.bioconductor.org/developers/how-to/unitTesting-guidelines/
 Git Setup: file://localhost/Users/abunayeem/Desktop/R%20Directory/paciorek-r-bootcamp-2013%20(1)/modules/module9_workflows.html
 For R as a programming language [it is recommended python handle it]: file://localhost/Users/abunayeem/Desktop/R%20Directory/paciorek-r-bootcamp-2013%20(1)/modules/module10_advanced.html
-
 
 ###2) Extracting Data
 
