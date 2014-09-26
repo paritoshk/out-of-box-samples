@@ -5,20 +5,44 @@ date: "September 9, 2014"
 output: html_document
 ---
 
-### Introduction
+##### Introduction
 This Manual is meant to consolidate my knowledge in data analytics. In addition, I am happy to share data techniques and strategies to anyone. Many manuals focus on small datasets, the strategies here will try to focus on Big Data. There are different types of "big"" datasets; 1) many observations [i.e. rows], which is not too bad; 2) many columns which are more difficult as you need to assess if columns are useful or not or it is worth tinkering with. In addition, simple subsetting operations now become more tedious and time-consuming.  
 
-### Unresolved Questions
+##### Unresolved Questions
 
-1) Suppose I zip a file from the internet, who can I find a specific 
 
-####Update History
+##### Update History
 MAC OS
 R version 3.1.1 (2014-07-10)
 R Studio version 0.98
 Number of cores: 2 [Use command on terminal: system_profiler | grep -i 'Cores']
 
-###1) Preparation
+##### R markup tools
+
+Link: <http://groupware.les.inf.puc-rio.br/har>
+Bold text: **bold** 
+Bullet point: *
+* bullet
+special designation: `rpart`
+Italic: *Italic*
+
+chunk commands:
+```{r name} 
+# you can name name it 
+```
+echo= FALSE -run but hides code great for graphs
+messages= FALSE -run but does not show message of loading
+warnings= FALSE- run but does not show warnings
+
+autodep=FALSE
+
+eval= FALSE -does not run the chunk code, still shows
+results='hide' -run but does not show the output results
+results='hold' -show output once all chunk written down 
+fig.show='hold' -hold figure output until end of code
+
+
+#####1) Preparation
 
 A) Set working directory: 
 
@@ -31,7 +55,7 @@ if (!getwd() == "./out-of-box-samples") {
 ```
 
 Suppose you want to create main directory & sub-directory for output
-```{r}
+```{r, eval=FALSE}
 dir.create(file.path(mainDir, subDir), showWarnings = FALSE)
 setwd(file.path(mainDir, subDir))
 ```
@@ -42,7 +66,16 @@ rm(list = ls(all = TRUE))
 date() #set date
 ```
 
-C) Appropiate packages- Load the most important packages that you use frequently 
+C1) Install packages that may me missing on computer
+if (!library("data.table")) {
+  install.packages("data.table")
+}
+
+if (!library(data.table)) {
+  install.packages("data.table")
+}
+
+C2) Load Appropiate packages- Load the most important packages that you use frequently 
 ```{r, message=FALSE}
 library(plyr) # load plyr first, then dplyr 
 library(lubridate) # a must program in handling dates
@@ -216,6 +249,10 @@ CC$Cyl<- as.factor(CC$Cyl) # convert character to factor, notice the summary fea
 CC$Cyl<- as.numeric(CC$Cyl) # factor to integer, the circle of class is complete
 ```
 
+    Suppose we face the issue that the orginal factor variables are number strings. You need to be really careful in converting it to numeric
+```{r}
+CC[, 1] <- round(as.numeric(as.character(CC[, 1])), 3) # this works for both factors, but also notice I used the round function which makes it more pleasant to see data
+```
     Note: 
     1) When creating mixed vectors, R chooses the lowest value of the vectors (i.e. character) to determine the class; also take note of list and vector class. This is important especially if introducing a string entry to a numeric column 
     2) Watch out for missing values when cconverting classes
@@ -315,6 +352,12 @@ CC<- arrange(CC,Wt) #arrange data frame
 CC$Index <-seq(along=nrow(CC)) #create a sequence of values based on # of rows, so it picks up missing values as well
 ```
 
+K) Rounding Numbers: It makes it much pleasant looking
+```{r}
+round(Cars$drat, 1) # a single column
+Cars[, c(5,6)]<- round(Cars[, c(5,6)], 1) # multiple columns and subsetts
+```
+
 ### Data Manipulation
 
 A) Meticulous Data-Mining:
@@ -359,6 +402,7 @@ select(mtcars,3:5,7) # I only took cols 3 to 5 and 7
 #select features also include other arguments like start_with(); ends_with(),contains(),match(),num_range()
 select(mtcars,starts_with("d"), more argument) #choose the columns that only start with d
 select(mtcars,-starts_with("d")) #choose the columns that not start with d WITH the minus sign
+select(mtcars, contains("t")) # looks for columns that has t
 ```
 
     Column Subsetting with grep index strategy
@@ -436,11 +480,13 @@ merge(B,A,by="id") # shows all unique combinations of the id
 merge(B,A,by="id",all=TRUE) # include ALL IDs that did not match
 ```
 
+```
 D) Splitting Existing Columns: when there is excess information in one column
 
 ```{r, message=FALSE}
 df <- data.frame(country =c("Angola","Belize"),dates = c("1951-1953", "1970-1972")) # Our goal is want to separate the years from start date to end date and place value
 df <- cbind(df, colsplit(df$dates, "-", c("start", "end"))) # we take column and split it with "-" for two variables; to get a sequence
+
 #split sequence
 ddply(df, .(country), function(x){
             data.frame(
@@ -479,7 +525,16 @@ summarize(CCGroup, mean(Wt),sum(Qsec)) # this takes the mean and sum calculation
     Case 2: Grouping by more than one layer; also collapsing dataset [always arrange appropiately and watch out for missing]
 ```{r, message=FALSE}
 ddply(CC,.(Cyl,Carb),summarise,Aver=mean(Drat)) # it groups cycle and Carb and takes the mean of Drat for each subcategory
-TidyData<-Master.dt[,lapply(.SD, mean),by='participants,activities'] #This takes the mean of EVERY column broken down by participants and activities; Great for big data but not useful for data analytics
+
+# More quick ay doing it but you are limited to one operation
+outData<-aggregate(selectedData,by=list(Activity,Subject),FUN=mean,na.rm=TRUE)
+
+#another way to do above
+Master.dt[,lapply(.SD, mean),by='participants,activities'] #This takes the mean of EVERY column broken down by participants and activities; Great for big data but not useful for data analytics
+
+# Another way to sum up values respect to a group
+xtabs(drat~cyl,mtcars) 
+
 ```
 
     Saving new table externally in some sort of text file:
@@ -624,6 +679,10 @@ qplot(TotMCropDmg,TotMPropDmg,data=by_Event_StormData[c(1:10),], col=Event, xlab
 #Plot 2
 qplot(date,TotSteps,data=TotalDay, geom="histogram", stat="identity",main="Total Steps Vs Time With NA Values", ylab="Total Steps")
 # the geom is crucial in determining what kind of plot you want to produce. see help or online to see all feature available
+
+qplot(drat, wt, data=mtcars, facets ="cyl~.") # three plots in row spearated by cyl
+qplot(drat, wt, data=mtcars, facets =".~cyl") # three plots in column separated by cyl
+
 ```    
 
     GGPlot:
@@ -635,6 +694,12 @@ plot2 = ggplot(data = mydata.subset, aes(x = year, y = vturn, linetype = )) +
 plot3 = ggplot(data = mydata.subset, aes(x = year, y = vturn, shape = )) + geom_point(aes(shape = country))
 grid.arrange(plot1, plot2, plot3, nrow = 3, ncol = 1)
 ggsave(filename = , plot = , scale = , width = , height = )
+```
+
+    Saving Plots quick code:
+```{r}
+dev.copy(png, "Blah.png", height = 480, width = 480)
+dev.off()
 ```
 
 B) Tables are extremely useful but we do not want to rely on Excel all the time

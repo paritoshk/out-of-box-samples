@@ -1,0 +1,547 @@
+---
+title: "R Machine Learning Manual"
+author: "Abu Nayeem"
+date: "September 23, 2014"
+output: html_document
+---
+
+
+#### Introduction
+This Manual is meant to consolidate my knowledge in machine learning using the R package. The first two steps of machine learning is the following:
+
+* What is the predictor variable [factor vs. numeric] 
+* How do you clean the dataset without removing valuable information? 
+
+Of course the standard practice of machine learning involves creating a training test [create model], cross validation set [test model], and a testing set [final unadulterated data]. This sort of testing procedure assures that the model does not face the issue of overfitting. This example will be a classification problem, but a numericla learning problem follow similar procedure.
+
+#####Executive Summary
+
+Technology has focused on developing health tools and gadgets to record how much training a person has done in a specific period of time. However, almost no research has been done in developing tools or models to give the trainer feedback on how well he has been performing exercises. This project is oriented in calculating a machine learning algorithm to determine whether a weight lifting trainer performed the exercise well or made an error in the execution. 
+
+##### DataSet
+
+The data set used for the model comes from the Groupware@LES from their Human Activity Recognition project. They performed a study to analyze how well a Weight Lifting Exercise was executed. Each trainer was given a sensor for his glove, belt, dumbbell and arm-band. These are tools used by every weight lifting trainer so the original exercises maintain integrity. 
+
+Each trainer was asked to perform weight lifting in a particular manner. First, to do it perfectly as ideally described. Second, throwing the elbows to the front. Third, lifting the dumbbell half way. Fourth, lowering the dumbbell halfway. Finally, throwing the hips to the front. In each exercise performed, the sensors recorded the movements and rotations, including max accelerations, min accelerations, averages, kurtosis, between others. 
+
+You can learn more here <http://groupware.les.inf.puc-rio.br/har>
+
+#### Preprocessing
+
+##### Loading libraries
+
+```{r setup, message=FALSE}
+set.seed(234)
+library(caret) # the power horse function; loads ggplot2 automatically 
+library(doMC) # enable parallel computing; loads parallel & iterators
+library(nnet) # for neural networking and multi-nomial log regression models
+library(randomForest) # random forest strategy
+library(kernlab) # allows plenty of tools of dimension reduction and such
+library(e1071) # allows more features but is needed for boosting models
+library(plyr) # data table operations
+library(dplyr) # data operations plus
+library(gbm) # general boosting method
+library(corrplot) # fancy correlation plot
+library(AppliedPredictiveModeling)
+library(foreach) # used in random forest alogrithm
+library(doParallel) # Parallel Processing
+library(ipred) # needed for treebagging
+library(rpart) # for rpart but it failed in this example
+registerDoMC(cores = 2) # register the number of cores to parallel process
+date() #set date
+```
+
+##### Extraction
+```{r, results='hide'}
+# Selecting the definition of NA string was defined via post-analysis
+trainingfile <- 'http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv'
+training <- read.csv(trainingfile, na.strings = c("NA", "#DIV/0!"))
+training <- tbl_df(training) # this data table is smoother
+testingfile <- 'http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv'
+testing <- read.csv(testingfile, na.strings = c("NA", "#DIV/0!"))
+testing <- tbl_df(testing)
+```
+
+##### Setup
+
+An unresolved debate is do you keep the cross validation pristine prior to implementing data cleaning techiniques. I recommend testing your algorithm in both options to see if it actually makes a difference. The cross validation process lose precious data which can be used to create a prediction model. Let's give it the worse case scenario where cross-validation set is also treated as pristine. Note: you cannot fundamentally change the training set because the testing set is still raw , so you should take that to account.
+
+Splitting training set into a smaller training set and cross-validation set
+```{r, results='hide'}
+inTrain <- createDataPartition(y = training$classe, p = 0.8, list = FALSE)
+smalltraining <- training[inTrain, ]
+crossvalidation <- training[-inTrain, ]
+```
+
+#### Data Cleaning
+
+A) **Basics**- Make basic assessment that need to be done
+```{r, results='hide'}
+dim(training)
+str(training)
+summary(training)
+```
+
+B) **Handling missing values:** note you should set the strings for missing upon retriving the data
+
+    Plotting of missing values:
+```{r}    
+qplot(1, colSums(is.na(smalltraining))/dim(smalltraining)[1], 
+      geom = 'jitter', 
+      main = '% of missing values per variable', 
+      xlab = '', ylab = '% missing values') # visualization of missing values
+```
+    
+    Accumulative method Removal:
+```{r, results='hide'}
+colSums(is.na(smalltraining)) # now we see the number of missing values in columns 
+                              # and see if they are significant for removal
+NonNAIndex <- which(colSums(is.na(smalltraining)) > 0) 
+# this extracts the column index missing variable with number
+RemoveNA <- smalltraining[ ,-NonNAIndex] 
+# Create new data frame that remmove columns that had missing values
+```
+    
+    Threshold Method: you choose the tolerable percentage and if above, remove the columns.
+``` {r removeNA, eval=FALSE}
+NonNAIndex <- which(apply(smalltraining, 2,
+                          function(x) {sum(is.na(x))}) > 0.5 * dim(smalltraining)[1])
+RemoveNA <- smalltraining[ ,-NonNAIndex]
+
+# alternative to above but more function like
+NA_threshold <- 0.50
+nTrain <- nrow(smalltraining)
+i <- 1
+while(i < ncol(smalltraining)) {
+  nNA <- sum(is.na(smalltraining[,i]))
+  if((nNA/nTrain) >= NA_threshold) {
+     NonNAIndex <- c(removeCols, i)
+  }
+  i <- i + 1
+}
+RemoveNA <- smalltraining[,-NonNAIndex]
+```
+
+C) **Removing Uninteresting Features:**
+    
+    Removing Unrelated Features:
+```{r}    
+# choose the columns that may be useful for analysis
+compacttraining <- select(RemoveNA, 2, 8:60) 
+```
+
+    Removing Near Zero variance features:
+```{r}
+# this checks if all columns have close to zero variance 
+# the saveMetric provide heuristic information of each column which is REALLY useful
+Nzv <- nearZeroVar(compacttraining,saveMetrics=TRUE) 
+Nzv # all false, so no columns will be removed
+Nzv <- nearZeroVar(compacttraining,saveMetrics=FALSE) 
+```
+```{r, eval=FALSE}
+# if there was columns to be removed this would be used
+compacttraining <- compacttraining[ ,-Nzv] 
+```
+
+D) **Removing Highly Correlated Variables:** For numerical/integer columns only
+
+    Plotting Correlated Variables:
+```{r}
+corData<- cor(compacttraining[ ,c(2:53)])
+corrplot(corData, 
+         title = "Corr,per eigenVectors",
+         order = "AOE",
+         method = "color", 
+         type = "lower", 
+         tl.cex = 0.6 )  # plot to have a look to correlations 
+```
+
+    Removing Correlated Variables (Manual Method)
+```{r, results='hide'}
+M <- abs(cor(compacttraining[ ,c(2:53)])) # create a correlation matrix
+diag(M) <- 0 # by default the diagnols are one so we make them equal zero
+which(M > 0.8, arr.ind = TRUE) # displays correlated pairs names
+which(M > 0.8, arr.ind = FALSE) # displays the column numbers of each match
+# you can remove certain pairs manually
+descriptivetraining <- select(compacttraining,  
+                       -c(magnet_arm_y , pitch_dumbbell, yaw_dumbbell , accel_arm_x, 
+                          gyros_arm_y, pitch_belt, accel_belt_x, yaw_belt, total_accel_belt,
+                          accel_belt_y, accel_belt_z, gyros_forearm_y, 
+                          gyros_dumbbell_z, gyros_dumbbell_x)) #40 variables left
+```
+
+    Alternative Removal Method: Note this methos had42 variables left
+```{r, eval=FALSE}
+descrCor <- cor(compacttraining[ ,c(2:53)])
+highlyCorDescr <- findCorrelation(descrCor, cutoff = 0.8)
+descriptivetraining <- compacttraining[, -highlyCorDescr] #42 varaibles left
+``` 
+
+     Removing high reasonable skewness [Not useful in predictions]: remember numerical columns only
+``` {r removeskew}
+factordescriptivetrain<-descriptivetraining[, c(1,40)] # separate non numerical variable
+numdescriptivetrain<-descriptivetraining[, -c(1,40)] # separate numerical variables
+NonskewIndex<-which(apply(numdescriptivetrain, 2, 
+                          function(x) abs(skewness(x)) > 6)) # find skewed volumns
+numdescriptivetrain <- numdescriptivetrain[, -NonskewIndex] # remove skewed columns 
+cleandata <- cbind(factordescriptivetrain,numdescriptivetrain) # Combine to create clean data
+```
+
+E) **Exploratory Analysis:** [if you have an idea which variables are of concern]
+ 
+```{r, message=FALSE}
+require(gridExtra)
+require(ggplot2)
+p1 <- qplot(classe,yaw_belt,geom="boxplot",data=smalltraining,fill=classe)
+p2 <- qplot(classe,pitch_forearm,geom="boxplot",data=smalltraining,fill=classe)
+p3 <- qplot(classe,magnet_dumbbell_z,geom="boxplot",data=smalltraining,fill=classe)
+p4 <- qplot(classe,magnet_belt_z,geom="boxplot",data=smalltraining,fill=classe)
+grid.arrange(p1,p2,p3,p4, ncol=2)
+```
+
+
+##### Complete the Column Index
+```{r, results='hide'}
+colIndex <- colnames(cleandata) #38 variables should be remaining
+check<-smalltraining[,colIndex]; check 
+# the colnames should be identical to that of cleandata  
+```
+
+#### Training Models
+
+**Pre-training:** Loading- You want to save your results so you don't need to constantly repeat analysis. Also note the rpart method failed. 
+
+```{r}
+if(file.exists("Machine Learning.RData")) {
+  load("Machine Learning.RData")
+}
+```
+
+**Random Forests:** Typically you may want build to smaller trees
+
+The classe variable is actually a categorical variable and therefore a classification method performs better. One could use a single tree, but Random Forest have proven to be the most accurate classification algorithm, mainly for the  reduction of variability while averaging different random trees. The out-of-bag (oob) error rate is important in this model: 
+
+In random forests, there is no need for cross-validation or a separate test set to get an unbiased estimate of the test set error. It is estimated internally, during the run, as follows: each tree is constructed using a different bootstrap sample from the original data. About one-third of the cases are left out of the bootstrap sample and not used in the construction of the kth tree. Put each case left out in the construction of the kth tree down the kth tree to get a classification. In this way, a test set classification is obtained for each case in about one-third of the trees. At the end of the run, take j to be the class that got most of the votes every time case n was oob. The proportion of times that j is not equal to the true class of n averaged over all cases is the oob error estimate. This has proven to be unbiased in many tests.
+
+**Method 1:** Standard Random Forest model
+    Run the model: [make sure parallel is running]
+```{r, eval=FALSE}
+registerDoParallel()
+Trfor1<- system.time(rf1 <- randomForest(classe ~ .,
+                                         data = smalltraining[,colIndex],
+                                         importance=TRUE))
+```
+    Check Predictions:
+```{r}
+rf1 # OOB estimate of  error rate: 0.77%
+rf1predictions1 <- predict(rf1, crossvalidation)
+confusionMatrix(rf1predictions1,crossvalidation$classe) 
+rfor1<- confusionMatrix(rf1predictions1,crossvalidation$classe)
+```
+
+    Assesment: What are the most influential trees? *Exclusive to random forest
+```{r}
+varImpPlot(rf1,pch=20,col="blue")
+```
+
+    Plot: Choosing the right number of trees
+``` {r}
+plot(rf1, log="y")
+legend("topright", colnames(rf1$err.rate),col=1:4,cex=0.8,fill=1:6)
+``` 
+
+**Method 2:** We now build 6 random forests with 150 trees each. We make use of parallel processing to build this model. Note: error with graphing tree
+
+    Set up and train model
+```{r, eval=FALSE}
+t <- smalltraining[, colIndex]
+x<- t[, -38]
+y <- smalltraining$classe
+Trfor2<- system.time(rf2 <- foreach(ntree=rep(150, 6),
+                                    .combine=randomForest::combine,
+                                    .packages='randomForest')
+                     %dopar% {
+                         randomForest(x, y, ntree=ntree) 
+                         })
+```
+    Check Prediction
+```{r}
+rf2 # OOB rate of 0% and used 900 trees
+
+#we need to remove the missing values for this setup in 
+NonNAIndex <- which(colSums(is.na(crossvalidation)) > 0) 
+cross <- crossvalidation[ ,-NonNAIndex]
+
+# cross is corssvalidation with missing variables missing
+rf2predictions <- predict(rf2, cross)
+confusionMatrix(rf2predictions,cross$classe)
+rfor2<- confusionMatrix(rf2predictions,crossvalidation$classe)
+# 100% accurate?
+
+#testing respect to original test set
+rf2predictions2 <- predict(rf2, RemoveNA)
+confusionMatrix(rf2predictions2,RemoveNA$classe)
+#100% accurate?
+```
+
+    Assesment: What are the most influential trees?
+```{r}
+varImpPlot(rf2,pch=20,col="blue")
+```
+
+**SVM RADIAL:** Support vector Machine is used for both classification and logistic regression. The radial kernal uses shortest distance of Euclidean distance. The kfolds separate the sample in two and then the model trains each section to predict the other; this information is then used to create the final model. Increased folds may increase validity but for each increased fold there is less data to predict the model. So be careful
+
+* I customized `train` control function to perform k-fold cross validation of 2.
+
+    Set up and run the model:
+```{r, eval=FALSE}
+tC <- trainControl(method = "cv", number = 2) # note 'cv' creates folds and 2 is the size
+TSVMRad<- system.time(SVMRadial1 <- train(classe ~ .,
+                                          method = "svmRadial",
+                                          trControl = tC, 
+                                          data = smalltraining[, colIndex]))
+```
+    Check predictions:
+```{r}
+SVMRadpredictions1 <- predict(SVMRadial1, crossvalidation)
+confusionMatrix(SVMRadpredictions1,crossvalidation$classe) 
+SVMRad <- confusionMatrix(SVMRadpredictions1,crossvalidation$classe)
+```
+
+**SVM RADIAL COST:** Similar to above but it now implements a penalty to reduce possibility of overfitting    
+
+    Setup and the run the model:
+```{r, eval=FALSE}
+# model creation and test
+tC <- trainControl(method = "cv", number = 2)
+TSVMRadCost<- system.time(SVMRadialCost1 <- train(classe ~ ., 
+                                                  method = "svmRadialCost",
+                                                  trControl = tC,
+                                                  data = smalltraining[, colIndex]))
+```
+    Check predictions:
+```{r}
+SVMRadCostpredictions1 <- predict(SVMRadialCost1, crossvalidation)
+confusionMatrix(SVMRadCostpredictions1,crossvalidation$classe) 
+SVMRadCost<- confusionMatrix(SVMRadCostpredictions1,crossvalidation$classe)
+```
+
+**TREE BAG:** it builds an expansive bundle of classification trees    
+
+    Setup model and train it:    
+```{r, eval=FALSE}
+tC <- trainControl(method = "cv", number = 2) 
+TTB<- system.time(treebag1 <- train(classe ~ .,
+                                    method = "treebag",
+                                    trControl = tC,
+                                    data = smalltraining[, colIndex]))
+```
+    Check predictions:
+```{r}
+treepredictions1 <- predict(treebag1, crossvalidation)
+confusionMatrix(treepredictions1,crossvalidation$classe)
+TB<- confusionMatrix(treepredictions1,crossvalidation$classe) 
+```
+
+Classification Tree: The most simplification form fo the classification tree
+``` {r, eval=FALSE}
+# apply classification tree
+TCT<- system.time(Classtree1 <- train(classe ~ .,
+                                      method="rpart",
+                                      data = smalltraining[, colIndex]))
+```
+```{r}
+Classtreepredictions1 <- predict(Classtree1, crossvalidation)
+confusionMatrix(Classtreepredictions1, crossvalidation$classe)
+CT <- confusionMatrix(Classtreepredictions1, crossvalidation$classe)
+```
+
+Gradient Boosting (GBM)- is a machine learning technique for regression problems, which produces a prediction model in the form of an ensemble of weak prediction models, typically decision trees. It builds the model in a stage-wise fashion like other boosting methods do, and it generalizes them by allowing optimization of an arbitrary differentiable loss function. The gradient boosting method can also be used for classification problems by reducing them to regression with a suitable loss function.
+    
+    Take a smaller sample to train model:
+```{r}
+sampletrain <- smalltraining[sample(nrow(smalltraining), 3000), ]
+inTrain <- createDataPartition(y=sampletrain$classe, p=0.7, list=FALSE)
+tinytraining <- sampletrain[inTrain, ]
+tinycrossvalidation <- sampletrain[-inTrain, ]
+```
+    Set up the grid and run the model:
+```{r, eval=FALSE}
+gbmGrid <-  expand.grid(interaction.depth = 5, # the num of interactions between features
+                        n.trees = 150, # the total number of trees or iterations                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
+                        shrinkage = 0.1) # the learning rate of step-size function
+TGBM<- system.time(GBM1 <- train(classe ~ .,
+                                 method="gbm",
+                                 data=tinytraining[ ,colIndex],
+                                 tuneGrid = gbmGrid,
+                                 verbose = FALSE)) #verbose doesn't show output iterations
+```
+    Check predictions:
+```{r}
+# test tiny crossvalidation
+GBM1predictions<-predict(GBM1,tinycrossvalidation) 
+confusionMatrix(GBM1predictions,tinycrossvalidation$classe)
+# test cross validation
+GBM1predictions2<-predict(GBM1,crossvalidation) 
+confusionMatrix(GBM1predictions2,crossvalidation$classe) 
+GBM<- confusionMatrix(GBM1predictions2,crossvalidation$classe) 
+```
+
+##### Comparing Models
+
+    Measuring Accuracy and Out of Sammple Error:
+```{r}
+# sum up all the methods
+FinalAccuracy <- data.frame(rfor1$overall[1], rfor2$overall[1], SVMRad$overall[1], 
+                            SVMRadCost$overall[1], TB$overall[1], CT$overall[1], 
+                            GBM$overall[1])
+colnames(FinalAccuracy) <- c("rfor1", "rfor2", "SVMRad", "SVMRadCost", "TB", "CT","GBM")
+rownames(FinalAccuracy) <- "Accuracy"
+FinalAccuracy
+# show the out-of-sample error
+outOfSamErr <- 1-FinalAccuracy
+rownames(outOfSamErr) <- "OSError"
+outOfSamErr
+```
+
+    Measuring Kappa- Goodness to Fit
+```{r}    
+FinalKappa <- data.frame(rfor1$overall[2], rfor2$overall[2], SVMRad$overall[2], 
+                            SVMRadCost$overall[2], TB$overall[2], CT$overall[2], 
+                            GBM$overall[2])
+colnames(FinalKappa) <- c("rfor1", "rfor2", "SVMRad", "SVMRadCost", "TB", "CT","GBM")
+rownames(FinalKappa) <- "Kappa"
+FinalKappa
+```
+
+    Measuring Size of each prediction model
+```{r}
+FinalSize <- data.frame(format(object.size(rf1), units = "MB"), 
+                         format(object.size(rf2), units = "MB"), 
+                         format(object.size(SVMRadial1), units = "MB"), 
+                         format(object.size(SVMRadialCost1), units = "MB"), 
+                         format(object.size(treebag1), units = "MB"), 
+                         format(object.size(Classtree1), units = "MB"), 
+                         format(object.size(GBM1), units = "MB"))
+colnames(FinalSize) <- c("rfor1", "rfor2", "SVMRad", "SVMRadCost", "TB", "CT","GBM")
+rownames(FinalSize) <- "Size"
+FinalSize
+```
+
+    Comparing computation time:
+```{r}
+FinalComp <- rbind(Trfor1, Trfor2, TSVMRad, TSVMRadCost, TTB, TCT, TGBM) 
+rownames(FinalComp) <- c("rfor1", "rfor2", "SVMRad", "SVMRadCost", "TB", "CT","GBM")
+FinalComp
+```
+
+    Complete Model Comparison:
+```{r}
+Group <- rbind(FinalKappa, outOfSamErr, FinalSize)
+TGroup<- data.frame(t(Group)) # transform to matrix and transpose it
+CompleteComparison<- data.frame(cbind(TGroup,FinalComp))
+CompleteComparison <- mutate(CompleteComparison, usertime=user.self + user.child, 
+                             systime=sys.self + sys.child, 
+                             model = c("rfor1", "rfor2", "SVMRad", "SVMRadCost",
+                                       "TB", "CT","GBM"))
+CompleteComparison<- CompleteComparison[, -c(4,5,7,8)]
+CompleteComparison[, 1] <- round(as.numeric(as.character(CompleteComparison[, 1])), 3)
+CompleteComparison[, 2] <- round(as.numeric(as.character(CompleteComparison[, 2])), 3)
+CompleteComparison <- select(CompleteComparison,7,1:6)
+CompleteComparison <- arrange(CompleteComparison, OSError)
+CompleteComparison # without timestamp variables
+```
+
+##### Sub-comparison of excluding timestamp variables
+
+Sub-Comparison to when we include timestamp variables [it was significant]
+```{r}
+first
+```
+Notice including timestamp variables decrease total size for almost all algorithms. Some models are impacted significantly computationally when including them while others enjoy one less variable. The reason is that it provides more possibilites to match and separate the data OR it make it easy to reach the goal because of fewer variables. REGARDLESS it is worth to explore tradeoffs in more well-tweaked models.
+
+#### Conclusion
+
+I've tested many machine learning models in this exercise. Normally, we just choose the most accurate algorithm and move on, but we need to consider the entire pipeline of the project. Several factors that we should care about is accuracy/outof sample error, fitted train model size, elapsed and system time. With that said the top three models are randomforest models, general boosting models, and treebag model. The treebag requires so much data to hold, so let's discard that. The GBM and randomforest are very both good candidates. Randomforest models have many additional features that shed a lot more of the internal processes, which can allow to build a more efficent model (less trees or remove the least interesting features. In contrast, GBM excels greatly in minimum size and training time while still maintaining accuaracy.
+
+With the comparison chart feature you can do short diagnostic on which model you want to implement. Note the logistic regression woould use a similar procedure with a few differences.
+
+##### Bibliography
+
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
+
+#### Additional Material
+
+**Principal Component Analysis**- It can only handle numeric vectors
+```{r, eval=FALSE}
+preProcompact <- preProcess(compacttraining[,-c(1,57)], method="pca")
+preProcdescriptive <- preProcess(descriptivetraining[,-c(1,42)], method="pca")
+```
+
+Do NOT Use PCA to modelfit for large datasets as it crashed for R or taken enormous amount of time to complete.
+
+
+##### Per person approach
+
+##### Train classifier for training subset
+Based on the findings from the previous section, we'll learn separate predictor for each user.
+```{r trainSubset, cache=TRUE, eval=FALSE, echo=FALSE}
+users <- sort(unique(train_red$user_name))
+setkey(train_red, user_name)
+
+train_red_split <- lapply(users, function(x){train_red[data.table(x)]})
+
+mdl <- lapply(users, function (x){train(form=.outcome~., 
+                                        data=train_red_split[[x]], 
+                                        method='rf', 
+                                        trControl = trainControl(method='cv', 
+                                                                 number=10, a
+                                                                 llowParallel=T, 
+                                                                 savePredictions=T))
+                                  })
+
+tmp <- sapply(users, function(x){cbind(pred=as.character(mdl[[x]]$finalModel$y),
+                                       classe=as.character(mdl[[x]]$finalModel$predicted))})
+tmp <- data.table(rbind(tmp[[1]],tmp[[2]], tmp[[3]], tmp[[4]], tmp[[5]], tmp[[6]]))
+confusionMatrix(tmp$pred, tmp$classe)
+```
+
+##### Apply model to test subset and determine out of sample error
+```{r classifySubset, cache=TRUE, eval=FALSE, echo=FALSE}
+setkey(test_red, user_name)
+test_red_split <- lapply(users, function(x){test_red[data.table(x)]})
+
+preds <- lapply(users, function (x){predict(mdl[[x]], test_red_split[[x]])})
+
+tmp <- sapply(users, function(x){cbind(pred=as.character(preds[[x]]),
+                                       classe=as.character(test_red_split[[x]]$.outcome))})
+
+tmp <- data.table(rbind(tmp[[1]],tmp[[2]], tmp[[3]], tmp[[4]], tmp[[5]], tmp[[6]]))
+confusionMatrix(tmp$pred, tmp$classe)
+```
+The out-of sample error seems to be well under control.
+
+##### Train classifier on full test set
+```{r trainFull, cache=TRUE, eval=FALSE, echo=FALSE}
+train_full_red <- train_raw[, naCount==0, with=F]
+setnames(train_full_red, 1, '.outcome')
+
+setkey(train_full_red, user_name)
+
+train_full_red_split <- lapply(users, function(x){train_full_red[data.table(x)]})
+
+mdl <- lapply(users, function (x){train(form=.outcome~.,
+                                        data=train_full_red_split[[x]],
+                                        method='rf',
+                                        trControl = trainControl(method='cv',
+                                                                 number=10,
+                                                                 allowParallel=T,
+                                                                 savePredictions=T))
+                                  })
+
+tmp <- sapply(users, function(x){cbind(pred=as.character(mdl[[x]]$finalModel$y), classe=as.character(mdl[[x]]$finalModel$predicted))})
+tmp <- data.table(rbind(tmp[[1]],tmp[[2]], tmp[[3]], tmp[[4]], tmp[[5]], tmp[[6]]))
+confusionMatrix(tmp$pred, tmp$classe)
+```
+
+

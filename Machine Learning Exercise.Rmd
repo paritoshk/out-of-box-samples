@@ -9,6 +9,10 @@ output: html_document
 
 Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways.
 
+#####Executive Summary
+
+Technology has focused on developing health tools and gadgets to record how much training a person has done in a specific period of time. However, almost no research has been done in developing tools or models to give the trainer feedback on how well he has been performing exercises. This project is oriented in calculating a machine learning algorithm to determine whether a weight lifting trainer performed the exercise well or made an erro in the execution. A Random Forest algorithm is applied and cross validated to avoid over fitting. It is conclusive that the model performs with 99% accuracy and may be utilized to give feedback to weight lifting trainers.  
+
 Spceial thanks and data came from the paper below:
 Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
 
@@ -28,9 +32,9 @@ if (!file.exists("./out-of-box-samples")) {
 rm(list = ls(all = TRUE))
 library(caret) # machine learning package
 library(plyr) # data table operations
-library(dplyr) # dat operations plus
-library(gbm) # precise learning method
-library(sampling) # for samples
+library(dplyr) # data operations plus
+library(gbm) # general boosting method
+library(sampling) # for sampling putposes
 date() #set date
 ```
 
@@ -73,14 +77,14 @@ which(M > 0.8, arr.ind=T)
 ```
 
 Matching Pairs: below
-(28)magnet_arm_z & magnet_arm_y(27) 
-(36)accel_dumbbell_x & pitch_dumbbell (29)
-(38)accel_dumbbell_z & yaw_dumbbell (31) 
-(26)magnet_arm_x & accel_arm_x(23) 
-(20)gyros_arm_x & gyros_arm_y(21)
-(13)magnet_belt_x => pitch_belt(10) & accel_belt_x [circle](4)
-(3)roll_belt => & yaw_belt(5) & total_accel_belt(6) & accel_belt_y(11) & accel_belt_z(12) 
-(48)gyros_forearm_z => gyros_forearm_y (47) & gyros_dumbbell_z(35) & gyros_dumbbell_x(33)
+(30)magnet_arm_z & magnet_arm_y(29) 
+(38)accel_dumbbell_x & pitch_dumbbell (31)
+(40)accel_dumbbell_z & yaw_dumbbell (33) 
+(28)magnet_arm_x & accel_arm_x(25) 
+(22)gyros_arm_x & gyros_arm_y(23)
+(15)magnet_belt_x => pitch_belt(6) & accel_belt_x [circle](12)
+(5)roll_belt => & yaw_belt(7) & total_accel_belt(8) & accel_belt_y(13) & accel_belt_z(14) 
+(50)gyros_forearm_z => gyros_forearm_y (49) & gyros_dumbbell_z(37) & gyros_dumbbell_x(35)
 
 I do not use PCA to combine the variables because the analysis would need the testing set as well and the rows may not comply. So I simply remove columns that are in the right side of the pairing. The remainder variable would not be strongly correlated
 
@@ -90,15 +94,15 @@ descriptivetraining <- select(compacttraining,
                        -c(magnet_arm_y , pitch_dumbbell, yaw_dumbbell , accel_arm_x, gyros_arm_y, 
                        pitch_belt, accel_belt_x, yaw_belt , total_accel_belt , accel_belt_y , 
                        accel_belt_z, gyros_forearm_y, gyros_dumbbell_z, gyros_dumbbell_x))
-descriptivetraining <- select(compacttraining, -c(27,28,31,23,21,4,10,5,6,11,12,47,35,33)) # the same as above                     
-columncompactIndex <- colnames(descriptivetraining)  # the importnt index!
+descriptivetraining <- select(compacttraining, -c(30,31,34,26,23,8,12,7,6,13,14,49,37,35)) # the same as above                     
+columncompactIndex <- colnames(descriptivetraining)  # the important index!
 ```
 
 ###Data Preparation
 
 I will be taking a random sample of 3000 observations. From this sample, I split it into a smaller training set and a cross validation set, which acts more or less like a testing set. Given the datacleaning process, the out of sample error should be small.
 ```{r}
-set.seed(234)
+
 sampletrain <- training[sample(nrow(training), 3000), ]
 inTrain <- createDataPartition(y=sampletrain$classe, p=0.7, list=FALSE)
 smalltraining <- sampletrain[inTrain, ]

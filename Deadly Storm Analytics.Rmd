@@ -1,13 +1,9 @@
 ---
-title: 'Reproducible Research: Peer Assessment 2'
+title: "Storm Data Analytics"
 author: "Abu Nayeem"
-date: "September 7, 2014"
-output:
-  pdf_document: default
-  html_document:
-    keep_md: yes
+date: "September 22, 2014"
+output: pdf_document
 ---
-
 ## Title: Human and Economic Cost of Destructive Storms on the American Heartland
 
 ## Synopsis
@@ -22,8 +18,8 @@ Working with the data was fairly tedious because the event type designation vari
 
 Preliminary (Standard): Note- R.Utils is needed to unzip the raw file
 ```{r, message=FALSE}
-if (!file.exists("./Repository Important")) {
-     dir.create("./Repository Important")
+if (!file.exists("repdata-data-StormData.csv")) {
+     dir.create("./out-of-box-samples")
 }
 library(plyr)
 library(ggplot2)
@@ -31,7 +27,7 @@ library(dplyr)
 library(R.utils)
 url <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
 download.file(url, "repdata-data-StormData.csv.bz2", method="curl")
-bunzip2("repdata-data-StormData.csv.bz2",dest="repdata-data-StormData.csv", overwrite=TRUE, exdir="./Repository Important")
+bunzip2("repdata-data-StormData.csv.bz2",dest="repdata-data-StormData.csv", overwrite=TRUE, exdir="./out-of-box-samples")
 ```
 Loading: 
 
@@ -144,5 +140,3 @@ by_Event_StormData %>% arrange(desc(TotMPropDmg)) %>% select(1,2,5,6,9,10)
 ```
 
 Analysis: Floods, by far, is the most destructive in both property and crop damages ($170 billion total). From the table, we see crops are most vulnerable to hailstorms, floods, and fire. This is reasonable since these events encompass large surface area and crops and vulnerable to impact. For property damage, tornados and more frequent events such as hail and thunderstorms are costly to US economy. Finally, we see coastal events and hurricanes doing massive property damage per occurence. There are several reasons for this: 1) coastal areas are more densely populated than the interior and 2) the real estate values of homes are considerably higher. That completes my report.
-
-
